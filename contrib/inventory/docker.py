@@ -356,6 +356,7 @@ import json
 import argparse
 import re
 import yaml
+import ansible.module_utils.six.moves.urllib.parse as urlparse
 
 from collections import defaultdict
 # Manipulation of the path is needed because the docker-py
@@ -577,7 +578,7 @@ class DockerInventory(object):
             self.get_inventory(client, host)
 
         if not self._args.host:
-            self.groups['docker_hosts'] = [host.get('docker_host') for host in docker_hosts]
+            self.groups['docker_hosts'] = [host.get('hostname') for host in docker_hosts]
             self.groups['_meta'] = dict(
                 hostvars=self.hostvars
             )
@@ -591,7 +592,7 @@ class DockerInventory(object):
 
         ssh_port = host.get('default_ssh_port')
         default_ip = host.get('default_ip')
-        hostname = host.get('docker_host')
+        hostname = host.get('hostname')
 
         try:
             containers = client.containers(all=True)
@@ -659,6 +660,17 @@ class DockerInventory(object):
     def _slugify(self, value):
         return 'docker_%s' % (re.sub(r'[^\w-]', '_', value).lower().lstrip('_'))
 
+    def _parse_hostname(self, docker_host, tls_hostname):
+        url = urlparse.urlparse(docker_host)
+        if url.scheme == 'unix':
+            return 'localhost'
+        if tls_hostname != 'localhost':
+            return tls_hostname
+        elif url.hostname:
+            return url.hostname
+        self.log('WARN: Unable to parse hostname from docker_host: {}'.format(docker_host))
+        return docker_host
+
     def get_hosts(self, config):
         '''
         Determine the list of docker hosts we need to talk to.
@@ -723,6 +735,7 @@ class DockerInventory(object):
                     DEFAULT_SSH_PORT
                 host_dict = dict(
                     docker_host=docker_host,
+                    hostname=self._parse_hostname(docker_host, tls_hostname),
                     api_version=api_version,
                     tls=tls,
                     tls_verify=tls_verify,
@@ -763,6 +776,7 @@ class DockerInventory(object):
             default_ssh_port = def_ssh_port or self._args.private_ssh_port or DEFAULT_SSH_PORT
             host_dict = dict(
                 docker_host=docker_host,
+                hostname=self._parse_hostname(docker_host, tls_hostname),
                 api_version=api_version,
                 tls=tls,
                 tls_verify=tls_verify,
