@@ -649,6 +649,7 @@ class DockerInventory(object):
                 facts = dict(
                     ansible_ssh_host=ip,
                     ansible_ssh_port=port.get('HostPort', int()),
+                    docker_host=host.get('docker_host'),
                     docker_name=name,
                     docker_short_id=short_id
                 )
